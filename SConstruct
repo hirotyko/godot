@@ -353,6 +353,11 @@ opts.Add(BoolVariable("builtin_zstd", "Use the built-in Zstd library", True))
 opts.Add("CXX", "C++ compiler binary")
 opts.Add("CC", "C compiler binary")
 opts.Add("LINK", "Linker binary")
+opts.Add(
+    EnumVariable(
+        "cpp_std", "C++ standard to use for compilation (e.g., 17, 20, 23)", "17", ["17", "20", "23"], ignorecase=2
+    )
+)
 opts.Add("cppdefines", "Custom defines for the pre-processor")
 opts.Add("ccflags", "Custom flags for both the C and C++ compilers")
 opts.Add("cxxflags", "Custom flags for the C++ compiler")
@@ -717,7 +722,7 @@ cc_version_metadata1 = cc_version["metadata1"]
 if cc_version_major == -1:
     print_warning(
         "Couldn't detect compiler version, skipping version checks. "
-        "Build may fail if the compiler doesn't support C++17 fully."
+        "Build may fail if the compiler doesn't support the selected C++ standard fully."
     )
 elif methods.using_gcc(env):
     if env.get("winrt"):
@@ -734,7 +739,7 @@ elif methods.using_gcc(env):
         if cc_version_major < 9:
             print_error(
                 "Detected GCC version older than 9, which does not fully support "
-                "C++17, or has bugs when compiling Godot. Supported versions are 9 "
+                "C++17 or later standards, or has bugs when compiling Godot. Supported versions are 9 "
                 "and later. Use a newer GCC version, or Clang 6 or later by passing "
                 '"use_llvm=yes" to the SCons command line.'
             )
@@ -769,7 +774,7 @@ elif methods.using_clang(env):
             if cc_version_major < 6:
                 print_error(
                     "Detected Clang version older than 6, which does not fully support "
-                    "C++17. Supported versions are Clang 6 and later."
+                    "C++17 or later standards. Supported versions are Clang 6 and later."
                 )
                 Exit(255)
             elif env["debug_paths_relative"] and cc_version_major < 10:
@@ -907,18 +912,20 @@ if env["lto"] != "none":
 
 # Set our C and C++ standard requirements.
 # C++17 is required as we need guaranteed copy elision as per GH-36436.
+# Can be overridden with cpp_std option (e.g., cpp_std=23).
 # Prepending to make it possible to override.
 # This needs to come after `configure`, otherwise we don't have env.msvc.
 if not env.msvc:
     # Specifying GNU extensions support explicitly, which are supported by
     # both GCC and Clang. Both currently default to gnu17 and gnu++17.
+    # C++ standard can be overridden with cpp_std option (17, 20, 23).
     env.Prepend(CFLAGS=["-std=gnu17"])
-    env.Prepend(CXXFLAGS=["-std=gnu++17"])
+    env.Prepend(CXXFLAGS=[f"-std=gnu++{env['cpp_std']}"])
 else:
     # MSVC started offering C standard support with Visual Studio 2019 16.8, which covers all
     # of our supported Visual Studio versions.
     env.Prepend(CFLAGS=["/std:c17"])
-    env.Prepend(CXXFLAGS=["/std:c++17"])
+    env.Prepend(CXXFLAGS=[f"/std:c++{env['cpp_std']}"])
     # MSVC is non-conforming with the C++ standard by default, so we enable more conformance.
     # Note that this is still not complete conformance, as certain Windows-related headers
     # don't compile under complete conformance.
